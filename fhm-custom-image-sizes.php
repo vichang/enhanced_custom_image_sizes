@@ -1,10 +1,10 @@
 <?php
 /*
 Plugin Name: Custom Image Sizes With Resize/Delete
-Plugin URI: https://github.com/vichang/enhanced_custom_image_sizes
-Description: A plugin that creates custom image sizes for image attachments. Based on custom image sizes
+Plugin URI: http://theblemish.com
+Description: A plugin that creates custom image sizes for image attachments. Based on Filosofo custom image sizes
 Author: Freakishly Huge Media
-Author URI: https://github.com/vichang
+Author URI: http://theblemish.com
 Version: 1.2
 */
 
@@ -26,20 +26,23 @@ class FHM_Custom_Image_Sizes {
 	public function filter_image_downsize($ignore = false, $attachment_id = 0, $size_name = 'thumbnail')
 	{
 		global $_wp_additional_image_sizes;
-		
+
 		// don't resize images in admin panel
 		if ( is_admin() ) return false;
-		
-		if(is_array($size_name)) $size_name = implode('x', $size_name);
-	
+
+		if( is_array($size_name) ) $size_name = implode('x', $size_name);
+
 		$attachment_id = (int) $attachment_id;
-		$size_name = trim($size_name);
-		
+		$size_name = trim( $size_name );
+		$original_width = 0;
+		$original_height = 0;
+
 		$meta = wp_get_attachment_metadata($attachment_id);
-		
+		if ( !$meta ) return false;
+
 		// get set dimensions
 		if ( isset( $_wp_additional_image_sizes[$size_name]['width'] ) )
-			$image_sizes[$size_name]['width'] = intval( $_wp_additional_image_sizes[$size_name]['width'] ); 
+			$image_sizes[$size_name]['width'] = intval( $_wp_additional_image_sizes[$size_name]['width'] );
 		else
 			$image_sizes[$size_name]['width'] = get_option( "{$size_name}_size_w" );
 
@@ -52,31 +55,33 @@ class FHM_Custom_Image_Sizes {
 			$image_sizes[$size_name]['crop'] = intval( $_wp_additional_image_sizes[$size_name]['crop'] );
 		else
 			$image_sizes[$size_name]['crop'] = get_option( "{$size_name}_crop" );
-		
+
 		if ( isset( $image_sizes[$size_name]['width'] ) || isset( $image_sizes[$size_name]['height'] ) ) {
 			// sizes to resize to
 			$height = (int) $image_sizes[$size_name]['height'];
 			$width = (int) $image_sizes[$size_name]['width'];
 			$crop = (bool) $image_sizes[$size_name]['crop'];
-			
+
 			// original file dim
-			$original_width = $meta['width'];
-			$original_height = $meta['height'];
-			
+			if (is_array($meta)) {
+				if (array_key_exists('width', $meta)) $original_width = $meta['width'];
+				if (array_key_exists('height', $meta)) $original_height = $meta['height'];
+			}
+
 			// current resized dim
 			$current_width = $current_height = 0;
-			
+
 			if (!empty($meta['sizes'][$size_name])) {
 				if (array_key_exists('width', $meta['sizes'][$size_name])) $current_width = $meta['sizes'][$size_name]['width'];
 				if (array_key_exists('height', $meta['sizes'][$size_name])) $current_height = $meta['sizes'][$size_name]['height'];
 			}
-			
+
 			// resized dimensions to compare against
 			list(,,,,$comp_x,$comp_y,,) = image_resize_dimensions( $original_width, $original_height, $width, $height, $crop );
 		} else {
 			$current_width = $comp_x = $current_height = $comp_y = 0;
 		}
-				
+
 		/* the requested size does not yet exist for this attachment */
 		/* compare resized width and heigh to current */
 		if ( ( empty( $meta['sizes'] ) || empty( $meta['sizes'][$size_name] ) ) ||
@@ -88,23 +93,23 @@ class FHM_Custom_Image_Sizes {
 				$width = (int) $matches[1];
 				$crop = true;
 			}
-			
+
 			// important to use isset, !empty will return since 0 = false
 			if ( isset( $height ) && isset( $width ) ) {
 				$resized_path = $this->_generate_attachment($attachment_id, $comp_x, $comp_y, $crop);
 				$fullsize_url = wp_get_attachment_url($attachment_id);
 				$file_name = basename($resized_path);
-				
+
 				// to populate metadata
 				$uploads = wp_upload_dir();
-				
+
 				// path and url for metadata
 				$new_path = _wp_relative_upload_path($resized_path);
 				$new_url = str_replace(basename($fullsize_url), $file_name, $fullsize_url);
-				
+
 				// file to delete
 				//$unlink_file = $uploads['basedir'] . '/' . str_replace(basename($meta['file']), $meta['sizes'][$size_name]['file'], $meta['file']);
-								
+
 				if ( ! empty( $resized_path ) ) {
 					$meta['sizes'][$size_name] = array(
 						'file' => $file_name,
@@ -113,11 +118,11 @@ class FHM_Custom_Image_Sizes {
 						'path' => $new_path,
 						'url' => $new_url,
 					);
-					
+
 					// delete old file on metadata update success
 					//if (wp_update_attachment_metadata($attachment_id, $meta)) unlink($unlink_file);
 					wp_update_attachment_metadata($attachment_id, $meta);
-					
+
 					return array(
 						$new_url,
 						$comp_x,
@@ -153,11 +158,11 @@ class FHM_Custom_Image_Sizes {
 		if ( ! function_exists('wp_load_image') ) {
 			require_once ABSPATH . 'wp-admin/includes/image.php';
 		}
-		
+
 		$resized_path = @image_resize($original_path, $width, $height, $crop);
-		
-		if ( 
-			! is_wp_error($resized_path) && 
+
+		if (
+			! is_wp_error($resized_path) &&
 			! is_array($resized_path)
 		) {
 			return $resized_path;
@@ -166,9 +171,11 @@ class FHM_Custom_Image_Sizes {
 		} else {
 			$orig_info = pathinfo($original_path);
 			$suffix = "{$width}x{$height}";
-			$dir = $orig_info['dirname'];
-			$ext = $orig_info['extension'];
-			$name = basename($original_path, ".{$ext}"); 
+			if ( isset ( $orig_info['dirname'] ) ) $dir = $orig_info['dirname'];
+			else $dir = '';
+			if ( isset ( $orig_info['extension'] ) ) $ext = $orig_info['extension'];
+			else $ext = '';
+			$name = basename($original_path, ".{$ext}");
 			$destfilename = "{$dir}/{$name}-{$suffix}.{$ext}";
 			if ( file_exists( $destfilename ) ) {
 				return $destfilename;
@@ -179,7 +186,8 @@ class FHM_Custom_Image_Sizes {
 	}
 }
 
-function initialize_custom_image_sizes() {
+function initialize_custom_image_sizes()
+{
 	new FHM_Custom_Image_Sizes;
 }
 
