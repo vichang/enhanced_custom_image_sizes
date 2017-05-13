@@ -167,7 +167,10 @@ class FHM_Custom_Image_Sizes {
 			$resized_path->set_quality( 70 );
 			$saved = $resized_path->save();
 			if ( ! is_wp_error( $saved ) ) return $saved['path'];
-			else return '';
+			else {
+				error_log($request->get_error_message());
+				return '';
+			}
 
 		// perhaps this image already exists.  If so, return it.
 		} else {
