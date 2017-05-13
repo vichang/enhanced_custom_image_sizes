@@ -159,13 +159,17 @@ class FHM_Custom_Image_Sizes {
 			require_once ABSPATH . 'wp-admin/includes/image.php';
 		}
 
-		$resized_path = @image_resize($original_path, $width, $height, $crop);
+		// $resized_path = @image_resize($original_path, $width, $height, $crop);
+		$resized_path = wp_get_image_editor( $original_path );
 
 		if (
 			! is_wp_error($resized_path) &&
 			! is_array($resized_path)
 		) {
-			return $resized_path;
+			$resized_path->resize( $width, $height, $crop );
+			$resized_path->set_quality( 70 );
+			$saved = $resized_path->save();
+			return $saved['path'];
 
 		// perhaps this image already exists.  If so, return it.
 		} else {
