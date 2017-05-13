@@ -168,7 +168,7 @@ class FHM_Custom_Image_Sizes {
 			$saved = $resized_path->save();
 			if ( ! is_wp_error( $saved ) ) return $saved['path'];
 			else {
-				error_log($request->get_error_message());
+				error_log($saved->get_error_message());
 				return '';
 			}
 
